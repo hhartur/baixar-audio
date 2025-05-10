@@ -8,7 +8,7 @@ const port = process.env.PORT || 10000;
 // Pasta onde o binário do yt-dlp está armazenado
 const ytDlpBinPath = path.join(__dirname, 'bin', 'yt-dlp'); // Caminho do binário
 
-app.use(express.static(path.join(__dirname), "public"))
+app.use(express.static(path.join(__dirname, 'public')));
 
 app.get('/download', async (req, res) => {
   const videoUrl = req.query.url; // A URL do vídeo que será passado como query string
