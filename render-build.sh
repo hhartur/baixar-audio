@@ -1,19 +1,20 @@
 #!/bin/bash
 set -e
 
+echo ">>> Atualizando pacotes..."
+apt-get update -y
+
 echo ">>> Instalando dependências..."
-sudo apt-get update
-sudo apt-get install -y ffmpeg python3-pip
+apt-get install -y ffmpeg python3-pip
 
 echo ">>> Instalando yt-dlp..."
-sudo pip3 install --upgrade yt-dlp
+pip3 install --upgrade yt-dlp
 
-echo ">>> Verificando instalação..."
+echo ">>> Configurando yt-dlp..."
+ln -sf $(which yt-dlp) /usr/local/bin/yt-dlp
+chmod +x /usr/local/bin/yt-dlp
+
+echo ">>> Verificando versão..."
 yt-dlp --version
-
-echo ">>> Configurando permissões..."
-if [ -f "./bin/yt-dlp" ]; then
-  chmod +x ./bin/yt-dlp
-fi
 
 echo ">>> Build completo!"

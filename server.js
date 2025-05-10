@@ -14,7 +14,7 @@ app.use(express.json());
 const isRender = process.env.RENDER;
 
 // Caminho para o yt-dlp
-const ytDlpCommand = isRender ? 'yt-dlp' : path.join(__dirname, 'bin', 'yt-dlp');
+const ytDlpCommand = 'yt-dlp'; // Agora usando a instalação global
 
 // Função para sanitizar nomes de arquivo
 function sanitizeFilename(name) {
