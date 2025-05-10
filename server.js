@@ -3,7 +3,7 @@ const cors = require('cors');
 const fs = require('fs');
 const path = require('path');
 const sanitize = require('sanitize-filename');
-const ytdlp = require('yt-dlp-exec');
+const ytdlp = require('yt-dlp');
 
 const app = express();
 const PORT = process.env.PORT || 10000;
