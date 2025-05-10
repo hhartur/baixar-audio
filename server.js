@@ -1,86 +1,60 @@
 // server.js
-const express = require('express');
-const { exec } = require('child_process');
-const path = require('path');
-const fs = require('fs');
-const app = express();
+const express    = require('express');
+const { execFile } = require('child_process');
+const path       = require('path');
+const fs         = require('fs');
+
+const app  = express();
 const port = process.env.PORT || 3000;
 
-// Serve arquivos estáticos (HTML, CSS, JS) da pasta 'public'
+// Serve arquivos estáticos
 app.use(express.static(path.join(__dirname, 'public')));
-
-// Middleware para interpretar o corpo das requisições como JSON
 app.use(express.json());
 
-// Caminho para o binário do yt-dlp
-const ytDlpPath = path.join(__dirname, 'yt-dlp.exe');
+// Caminho absoluto para o binário
+const ytDlpPath = path.resolve(__dirname, 'bin', 'yt-dlp'); // sem .exe em Linux/macOS
 
-// Função para decodificar o nome do arquivo
-function decodeFilename(filename) {
-    return decodeURIComponent(filename.replace(/\+/g, ' '));
+// Decodifica nomes de arquivo URL‑encoded
+function decodeFilename(name) {
+  return decodeURIComponent(name.replace(/\+/g, ' '));
 }
 
-// Rota para processar o download do áudio
 app.post('/download', (req, res) => {
-    const { url } = req.body;
-    if (!url) {
-        return res.status(400).json({ error: 'URL não fornecida' });
+  const { url } = req.body;
+  if (!url) return res.status(400).json({ error: 'URL não fornecida' });
+
+  // 1) Obter título
+  execFile(ytDlpPath, ['--get-title', url], (err, stdout, stderr) => {
+    if (err) {
+      console.error('Erro ao obter título:', err);
+      return res.status(500).json({ error: 'Falha ao obter título.' });
     }
+    const rawTitle = decodeFilename(stdout.trim()).replace(/[^\w\s]/g, '').replace(/\s+/g, ' ').trim();
+    const outputDir  = path.join(__dirname, 'downloads');
+    const outputPath = path.join(outputDir, `${rawTitle}.mp3`);
 
-    // Comando para obter o título do vídeo usando yt-dlp
-    const getTitleCommand = `"${ytDlpPath}" --get-title "${url}"`;
+    // Garante existência da pasta
+    if (!fs.existsSync(outputDir)) fs.mkdirSync(outputDir, { recursive: true });
 
-    exec(getTitleCommand, (error, title, stderr) => {
-        if (error) {
-            console.error(`Erro ao obter título do vídeo: ${error.message}`);
-            return res.status(500).json({ error: 'Erro ao obter título do vídeo.' });
+    // 2) Baixar e converter áudio
+    execFile(
+      ytDlpPath,
+      ['-f', 'bestaudio', '--extract-audio', '--audio-format', 'mp3', '-o', outputPath, url],
+      (err2, stdout2, stderr2) => {
+        if (err2) {
+          console.error('Erro ao baixar áudio:', err2);
+          return res.status(500).json({ error: 'Falha no download de áudio.' });
         }
-        if (stderr) {
-            console.error(`Erro no stderr ao obter título: ${stderr}`);
-            return res.status(500).json({ error: 'Erro ao processar o título do vídeo.' });
-        }
-
-        // Remove quebras de linha do título do vídeo e decodifica o nome do arquivo
-        title = decodeFilename(title.trim());
-
-        // Substitui espaços e caracteres especiais
-        title = title.replace(/[^\w\s]/gi, '').replace(/\s+/g, ' ').trim();
-
-        const outputPath = path.join(__dirname, 'downloads', `${title}.mp3`);
-        
-        // Crie a pasta 'downloads' se não existir
-        if (!fs.existsSync(path.dirname(outputPath))) {
-            fs.mkdirSync(path.dirname(outputPath), { recursive: true });
-        }
-
-        // Comando para executar o yt-dlp e baixar o áudio com o nome do vídeo
-        const command = `"${ytDlpPath}" -f bestaudio --extract-audio --audio-format mp3 -o "${outputPath}" "${url}"`;
-
-        exec(command, (error, stdout, stderr) => {
-            if (error) {
-                console.error(`Erro ao executar yt-dlp: ${error.message}`);
-                return res.status(500).json({ error: 'Erro ao baixar o áudio.' });
-            }
-            if (stderr) {
-                console.error(`Erro no stderr: ${stderr}`);
-                return res.status(500).json({ error: 'Erro no processo de download.' });
-            }
-            
-            console.log(`Saída: ${stdout}`);
-            res.download(outputPath, `${title}.mp3`, (err) => {
-                if (err) {
-                    console.error('Erro ao enviar o arquivo:', err);
-                }
-                // Após o download, pode deletar o arquivo temporário se necessário
-                fs.unlink(outputPath, (err) => {
-                    if (err) console.error('Erro ao deletar o arquivo:', err);
-                });
-            });
+        // 3) Enviar arquivo como attachment
+        res.download(outputPath, `${rawTitle}.mp3`, (dlErr) => {
+          if (dlErr) console.error('Erro ao enviar arquivo:', dlErr);
+          fs.unlink(outputPath, () => {}); // limpa após envio
         });
-    });
+      }
+    );
+  });
 });
 
-// Inicia o servidor
 app.listen(port, () => {
-    console.log(`Servidor rodando em http://localhost:${port}`);
+  console.log(`Servidor rodando em http://localhost:${port}`);
 });
