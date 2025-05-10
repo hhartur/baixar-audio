@@ -1,70 +1,84 @@
-// backend/server.js
 const express = require('express');
 const cors = require('cors');
-const ytdl = require('@distube/ytdl-core'); // Usando o fork mantido
-const ffmpeg = require('fluent-ffmpeg');
+const fs = require('fs');
 const path = require('path');
-const sanitize = require('sanitize-filename'); // Para nomes de arquivo seguros
+const sanitize = require('sanitize-filename');
+const ytdlp = require('yt-dlp-exec');
 
 const app = express();
-const PORT = process.env.PORT || 3000;
+const PORT = process.env.PORT || 10000;
 
-// Configuração do FFmpeg (opcional, se não estiver no PATH global)
-// Se você instalou o ffmpeg e ele não está no PATH global, descomente e ajuste:
-// const ffmpegPath = require('@ffmpeg-installer/ffmpeg').path;
-// ffmpeg.setFfmpegPath(ffmpegPath);
+app.use(cors());
+app.use(express.json());
 
-app.use(cors()); // Permite requisições de diferentes origens (seu frontend)
-app.use(express.json()); // Para parsear JSON no corpo das requisições
-app.use(express.static(path.join(__dirname, 'public'))); // Servir arquivos estáticos do frontend
+// Pasta temporária (Render permite uso de disco temporário em /tmp)
+const TMP_DIR = '/tmp';
 
 app.post('/download', async (req, res) => {
     const { url } = req.body;
 
-    if (!url || !ytdl.validateURL(url)) {
-        return res.status(400).json({ error: 'URL do YouTube inválida.' });
+    if (!url || typeof url !== 'string') {
+        return res.status(400).json({ error: 'URL inválida.' });
     }
 
     try {
-        const info = await ytdl.getInfo(url);
-        const videoTitle = sanitize(info.videoDetails.title) || 'audio'; // Nome do arquivo seguro
-        const safeFileName = `${videoTitle}.mp3`;
-
-        console.log(`Iniciando download e conversão para: ${videoTitle}`);
-
-        // Define os headers para o download do arquivo
-        res.setHeader('Content-Disposition', `attachment; filename="${safeFileName}"`);
-        res.setHeader('Content-Type', 'audio/mpeg');
-
-        const audioStream = ytdl(url, {
-            quality: 'highestaudio',
-            filter: 'audioonly',
+        // Passo 1: pega as informações do vídeo
+        const info = await ytdlp(url, {
+            dumpSingleJson: true,
+            noWarnings: true,
+            noCallHome: true,
+            flatPlaylist: true,
+            ...(fs.existsSync(path.join(__dirname, 'cookies.txt')) && {
+                cookie: path.join(__dirname, 'cookies.txt'), // Usa cookies se o arquivo existir
+            }),
         });
 
-        // Converte o stream para MP3 e envia para o cliente
-        ffmpeg(audioStream)
-            .audioBitrate(192) // Qualidade do MP3
-            .toFormat('mp3')
-            .on('error', (err) => {
-                console.error('Erro no FFmpeg:', err.message);
-                if (!res.headersSent) {
-                    res.status(500).json({ error: 'Falha ao converter o áudio.', details: err.message });
-                }
-            })
-            .on('end', () => {
-                console.log(`Conversão de "${videoTitle}" para MP3 finalizada.`);
-            })
-            .pipe(res, { end: true }); // Envia o output do ffmpeg diretamente para a resposta HTTP
+        const rawTitle = info.title || 'audio';
+        const safeTitle = sanitize(rawTitle).replace(/\s+/g, '_');
+        const fileName = `${safeTitle}.mp3`;
+        const filePath = path.join(TMP_DIR, fileName);
 
-    } catch (error) {
-        console.error('Erro geral:', error);
-        if (!res.headersSent) {
-            res.status(500).json({ error: 'Erro ao processar o vídeo.', details: error.message });
+        console.log(`🎵 Baixando e convertendo: ${rawTitle}`);
+
+        // Passo 2: baixa o áudio e converte para MP3
+        await ytdlp(url, {
+            extractAudio: true,
+            audioFormat: 'mp3',
+            audioQuality: 0,
+            format: 'bestaudio',
+            output: filePath,
+            ...(fs.existsSync(path.join(__dirname, 'cookies.txt')) && {
+                cookie: path.join(__dirname, 'cookies.txt'),
+            }),
+        });
+
+        // Verifica se o arquivo existe
+        if (!fs.existsSync(filePath)) {
+            throw new Error('Arquivo não gerado.');
         }
+
+        console.log(`✅ Enviando arquivo: ${fileName}`);
+
+        res.setHeader('Content-Disposition', `attachment; filename="${fileName}"`);
+        res.setHeader('Content-Type', 'audio/mpeg');
+
+        const fileStream = fs.createReadStream(filePath);
+        fileStream.pipe(res);
+
+        // Limpa o arquivo após envio
+        fileStream.on('end', () => {
+            fs.unlink(filePath, () => {});
+        });
+
+    } catch (err) {
+        console.error('❌ Erro ao processar vídeo:', err);
+        res.status(500).json({
+            error: 'Erro ao processar o vídeo.',
+            details: err.stderr || err.message || err,
+        });
     }
 });
 
 app.listen(PORT, () => {
-    console.log(`Servidor backend rodando na porta ${PORT}`);
-    console.log(`Acesse o site em http://localhost:${PORT}`);
+    console.log(`🚀 Servidor rodando em http://localhost:${PORT}`);
 });
