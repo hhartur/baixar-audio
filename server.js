@@ -1,60 +1,71 @@
-// server.js
-const express    = require('express');
-const { execFile } = require('child_process');
-const path       = require('path');
-const fs         = require('fs');
+const express = require('express');
+const { exec } = require('child_process');
+const path = require('path');
+const fs = require('fs');
 
-const app  = express();
+const app = express();
 const port = process.env.PORT || 3000;
 
-// Serve arquivos estáticos
+// Configurações
 app.use(express.static(path.join(__dirname, 'public')));
 app.use(express.json());
 
-// Caminho absoluto para o binário
-const ytDlpPath = path.resolve(__dirname, 'bin', 'yt-dlp'); // sem .exe em Linux/macOS
+// Verifica se está no Render
+const isRender = process.env.RENDER;
 
-// Decodifica nomes de arquivo URL‑encoded
-function decodeFilename(name) {
-  return decodeURIComponent(name.replace(/\+/g, ' '));
+// Caminho para o yt-dlp
+const ytDlpCommand = isRender ? 'yt-dlp' : path.join(__dirname, 'bin', 'yt-dlp');
+
+// Função para sanitizar nomes de arquivo
+function sanitizeFilename(name) {
+  return name.replace(/[^\w\s.-]/g, '').replace(/\s+/g, ' ').trim();
 }
 
-app.post('/download', (req, res) => {
-  const { url } = req.body;
-  if (!url) return res.status(400).json({ error: 'URL não fornecida' });
+// Rota de download
+app.post('/download', async (req, res) => {
+  try {
+    const { url } = req.body;
+    if (!url) return res.status(400).json({ error: 'URL não fornecida' });
 
-  // 1) Obter título
-  execFile(ytDlpPath, ['--get-title', url], (err, stdout, stderr) => {
-    if (err) {
-      console.error('Erro ao obter título:', err);
-      return res.status(500).json({ error: 'Falha ao obter título.' });
-    }
-    const rawTitle = decodeFilename(stdout.trim()).replace(/[^\w\s]/g, '').replace(/\s+/g, ' ').trim();
-    const outputDir  = path.join(__dirname, 'downloads');
-    const outputPath = path.join(outputDir, `${rawTitle}.mp3`);
+    // 1. Obter título do vídeo
+    const title = await new Promise((resolve, reject) => {
+      exec(`${ytDlpCommand} --get-title "${url}"`, (err, stdout, stderr) => {
+        if (err) return reject(new Error('Falha ao obter título'));
+        resolve(sanitizeFilename(stdout.trim()));
+      });
+    });
 
-    // Garante existência da pasta
+    // 2. Configurar caminhos
+    const outputDir = path.join(__dirname, 'temp');
     if (!fs.existsSync(outputDir)) fs.mkdirSync(outputDir, { recursive: true });
+    
+    const outputPath = path.join(outputDir, `${title}.mp3`);
 
-    // 2) Baixar e converter áudio
-    execFile(
-      ytDlpPath,
-      ['-f', 'bestaudio', '--extract-audio', '--audio-format', 'mp3', '-o', outputPath, url],
-      (err2, stdout2, stderr2) => {
-        if (err2) {
-          console.error('Erro ao baixar áudio:', err2);
-          return res.status(500).json({ error: 'Falha no download de áudio.' });
+    // 3. Download e conversão
+    await new Promise((resolve, reject) => {
+      exec(
+        `${ytDlpCommand} -x --audio-format mp3 -o "${outputPath}" "${url}"`,
+        (err, stdout, stderr) => {
+          if (err) return reject(new Error('Falha no download'));
+          resolve();
         }
-        // 3) Enviar arquivo como attachment
-        res.download(outputPath, `${rawTitle}.mp3`, (dlErr) => {
-          if (dlErr) console.error('Erro ao enviar arquivo:', dlErr);
-          fs.unlink(outputPath, () => {}); // limpa após envio
-        });
-      }
-    );
-  });
+      );
+    });
+
+    // 4. Enviar arquivo
+    res.download(outputPath, `${title}.mp3`, (err) => {
+      // Limpar arquivo temporário
+      fs.unlink(outputPath, () => {});
+      if (err) console.error('Erro ao enviar arquivo:', err);
+    });
+
+  } catch (error) {
+    console.error('Erro no processo:', error);
+    res.status(500).json({ error: error.message || 'Erro no servidor' });
+  }
 });
 
+// Iniciar servidor
 app.listen(port, () => {
-  console.log(`Servidor rodando em http://localhost:${port}`);
+  console.log(`Servidor rodando na porta ${port}`);
 });
