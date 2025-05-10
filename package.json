@@ -4,7 +4,7 @@
   "main": "server.js",
   "scripts": {
     "start": "node server.js",
-    "build": "mkdir -p temp && chmod +x bin/yt-dlp",
+    "build": "chmod +x .render-build.sh && ./.render-build.sh",
     "test": "echo \"Error: no test specified\" && exit 1"
   },
   "dependencies": {
