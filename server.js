@@ -1,63 +1,70 @@
-// server.js
 const express = require('express');
-const cors = require('cors');
-const fs = require('fs');
 const path = require('path');
-const sanitize = require('sanitize-filename');
-const youtubedl = require('youtube-dl-exec'); // <— mudou aqui
-
+const fs = require('fs');
+const youtubedl = require('youtube-dl-exec');
 const app = express();
-const PORT = process.env.PORT || 10000;
-const TMP_DIR = '/tmp';
+const port = process.env.PORT || 10000;
 
-app.use(cors());
-app.use(express.json());
-app.use(express.static(path.join(__dirname, "public")));
+// Pasta onde o binário do yt-dlp está armazenado
+const ytDlpBinPath = path.join(__dirname, 'bin', 'yt-dlp'); // Caminho do binário
 
+app.use(express.static(path.join(__dirname), "public"))
 
-app.post('/download', async (req, res) => {
-  const { url } = req.body;
-  if (!url) return res.status(400).json({ error: 'URL inválida.' });
+app.get('/download', async (req, res) => {
+  const videoUrl = req.query.url; // A URL do vídeo que será passado como query string
+
+  if (!videoUrl) {
+    return res.status(400).send('URL do vídeo não fornecida!');
+  }
 
   try {
-    // 1) Pega info do vídeo (usa cookies.txt se existir)
-    const info = await youtubedl(url, {
-      dumpSingleJson: true,
-      noWarnings: true,
-      noCallHome: true,
-      flatPlaylist: true,
-      ...(fs.existsSync('cookies.txt') && { cookie: 'cookies.txt' })
-    });
+    // Definindo o caminho para salvar o arquivo mp3
+    const outputFilePath = path.join(__dirname, 'downloads', `${getVideoName(videoUrl)}.mp3`);
+    
+    // Cria a pasta de downloads caso não exista
+    if (!fs.existsSync(path.join(__dirname, 'downloads'))) {
+      fs.mkdirSync(path.join(__dirname, 'downloads'));
+    }
 
-    // 2) Gera nome seguro
-    const rawTitle = info.title || 'audio';
-    const safeTitle = sanitize(rawTitle).replace(/\s+/g, '_');
-    const fileName = `${safeTitle}.mp3`;
-    const filePath = path.join(TMP_DIR, fileName);
-
-    console.log(`🎵 Baixando: ${rawTitle}`);
-
-    // 3) Baixa e converte direto para /tmp
-    await youtubedl(url, {
+    // Executando yt-dlp para baixar o áudio
+    youtubedl(videoUrl, {
+      binary: ytDlpBinPath,  // Usando o binário local
       extractAudio: true,
       audioFormat: 'mp3',
       audioQuality: 0,
       format: 'bestaudio',
-      output: filePath,
+      output: outputFilePath,
       ...(fs.existsSync('cookies.txt') && { cookie: 'cookies.txt' })
+    })
+    .then(() => {
+      // Enviando o arquivo para download
+      res.download(outputFilePath, (err) => {
+        if (err) {
+          console.error('Erro ao enviar o arquivo:', err);
+          res.status(500).send('Erro ao enviar o arquivo.');
+        }
+      });
+    })
+    .catch((err) => {
+      console.error('Erro ao executar yt-dlp:', err);
+      res.status(500).send('Erro ao processar o vídeo.');
     });
-
-    // 4) Envia como attachment
-    res.setHeader('Content-Disposition', `attachment; filename="${fileName}"`);
-    res.setHeader('Content-Type', 'audio/mpeg');
-    const stream = fs.createReadStream(filePath);
-    stream.pipe(res).on('finish', () => fs.unlink(filePath, () => {}));
-  } catch (err) {
-    console.error('❌ Erro ao processar vídeo:', err);
-    res.status(500).json({ error: 'Falha ao processar o vídeo.', details: err.stderr || err.message });
+  } catch (error) {
+    console.error('Erro geral:', error);
+    res.status(500).send('Erro ao processar o pedido.');
   }
 });
 
-app.listen(PORT, () => {
-  console.log(`🚀 Servidor rodando em http://localhost:${PORT}`);
+// Função para extrair o nome do vídeo
+function getVideoName(url) {
+  const regex = /(?:https?:\/\/(?:www\.)?youtube\.com\/(?:watch\?v=|playlist\?list=)([a-zA-Z0-9_-]{11}))/;
+  const match = url.match(regex);
+  if (match && match[1]) {
+    return match[1];  // Retorna o ID do vídeo como nome
+  }
+  return 'video';  // Caso o nome não seja encontrado, retorna 'video' como padrão
+}
+
+app.listen(port, () => {
+  console.log(`🚀 Servidor rodando em http://localhost:${port}`);
 });
