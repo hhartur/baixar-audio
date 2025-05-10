@@ -1,84 +1,63 @@
+// server.js
 const express = require('express');
 const cors = require('cors');
 const fs = require('fs');
 const path = require('path');
 const sanitize = require('sanitize-filename');
-const ytdlp = require('yt-dlp');
+const youtubedl = require('youtube-dl-exec'); // <— mudou aqui
 
 const app = express();
 const PORT = process.env.PORT || 10000;
+const TMP_DIR = '/tmp';
 
 app.use(cors());
 app.use(express.json());
+app.use(express.static(path.join(__dirname, "public")));
 
-// Pasta temporária (Render permite uso de disco temporário em /tmp)
-const TMP_DIR = '/tmp';
 
 app.post('/download', async (req, res) => {
-    const { url } = req.body;
+  const { url } = req.body;
+  if (!url) return res.status(400).json({ error: 'URL inválida.' });
 
-    if (!url || typeof url !== 'string') {
-        return res.status(400).json({ error: 'URL inválida.' });
-    }
+  try {
+    // 1) Pega info do vídeo (usa cookies.txt se existir)
+    const info = await youtubedl(url, {
+      dumpSingleJson: true,
+      noWarnings: true,
+      noCallHome: true,
+      flatPlaylist: true,
+      ...(fs.existsSync('cookies.txt') && { cookie: 'cookies.txt' })
+    });
 
-    try {
-        // Passo 1: pega as informações do vídeo
-        const info = await ytdlp(url, {
-            dumpSingleJson: true,
-            noWarnings: true,
-            noCallHome: true,
-            flatPlaylist: true,
-            ...(fs.existsSync(path.join(__dirname, 'cookies.txt')) && {
-                cookie: path.join(__dirname, 'cookies.txt'), // Usa cookies se o arquivo existir
-            }),
-        });
+    // 2) Gera nome seguro
+    const rawTitle = info.title || 'audio';
+    const safeTitle = sanitize(rawTitle).replace(/\s+/g, '_');
+    const fileName = `${safeTitle}.mp3`;
+    const filePath = path.join(TMP_DIR, fileName);
 
-        const rawTitle = info.title || 'audio';
-        const safeTitle = sanitize(rawTitle).replace(/\s+/g, '_');
-        const fileName = `${safeTitle}.mp3`;
-        const filePath = path.join(TMP_DIR, fileName);
+    console.log(`🎵 Baixando: ${rawTitle}`);
 
-        console.log(`🎵 Baixando e convertendo: ${rawTitle}`);
+    // 3) Baixa e converte direto para /tmp
+    await youtubedl(url, {
+      extractAudio: true,
+      audioFormat: 'mp3',
+      audioQuality: 0,
+      format: 'bestaudio',
+      output: filePath,
+      ...(fs.existsSync('cookies.txt') && { cookie: 'cookies.txt' })
+    });
 
-        // Passo 2: baixa o áudio e converte para MP3
-        await ytdlp(url, {
-            extractAudio: true,
-            audioFormat: 'mp3',
-            audioQuality: 0,
-            format: 'bestaudio',
-            output: filePath,
-            ...(fs.existsSync(path.join(__dirname, 'cookies.txt')) && {
-                cookie: path.join(__dirname, 'cookies.txt'),
-            }),
-        });
-
-        // Verifica se o arquivo existe
-        if (!fs.existsSync(filePath)) {
-            throw new Error('Arquivo não gerado.');
-        }
-
-        console.log(`✅ Enviando arquivo: ${fileName}`);
-
-        res.setHeader('Content-Disposition', `attachment; filename="${fileName}"`);
-        res.setHeader('Content-Type', 'audio/mpeg');
-
-        const fileStream = fs.createReadStream(filePath);
-        fileStream.pipe(res);
-
-        // Limpa o arquivo após envio
-        fileStream.on('end', () => {
-            fs.unlink(filePath, () => {});
-        });
-
-    } catch (err) {
-        console.error('❌ Erro ao processar vídeo:', err);
-        res.status(500).json({
-            error: 'Erro ao processar o vídeo.',
-            details: err.stderr || err.message || err,
-        });
-    }
+    // 4) Envia como attachment
+    res.setHeader('Content-Disposition', `attachment; filename="${fileName}"`);
+    res.setHeader('Content-Type', 'audio/mpeg');
+    const stream = fs.createReadStream(filePath);
+    stream.pipe(res).on('finish', () => fs.unlink(filePath, () => {}));
+  } catch (err) {
+    console.error('❌ Erro ao processar vídeo:', err);
+    res.status(500).json({ error: 'Falha ao processar o vídeo.', details: err.stderr || err.message });
+  }
 });
 
 app.listen(PORT, () => {
-    console.log(`🚀 Servidor rodando em http://localhost:${PORT}`);
+  console.log(`🚀 Servidor rodando em http://localhost:${PORT}`);
 });
