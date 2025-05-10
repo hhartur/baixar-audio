@@ -1,9 +1,9 @@
-/* frontend/style.css */
+/* Geral */
 body {
     font-family: 'Arial', sans-serif;
     background-color: #f4f4f9;
     margin: 0;
-    padding: 20px;
+    padding: 0;
     display: flex;
     justify-content: center;
     align-items: center;
@@ -13,53 +13,61 @@ body {
 
 .container {
     background-color: #fff;
-    padding: 30px 40px;
-    border-radius: 8px;
-    box-shadow: 0 4px 15px rgba(0, 0, 0, 0.1);
+    padding: 40px;
+    border-radius: 12px;
+    box-shadow: 0 10px 30px rgba(0, 0, 0, 0.1);
     text-align: center;
     width: 100%;
-    max-width: 500px;
+    max-width: 480px;
+    box-sizing: border-box;
+    border: 1px solid #ddd;
 }
 
 h1 {
     color: #333;
-    margin-bottom: 25px;
-    font-size: 1.8em;
+    margin-bottom: 30px;
+    font-size: 2em;
+    font-weight: bold;
 }
 
+/* Input e Botão */
 .input-group {
     display: flex;
+    flex-direction: column; /* Torna a coluna no mobile */
     margin-bottom: 20px;
-    gap: 10px; /* Espaço entre input e botão */
+    gap: 15px; /* Espaço entre input e botão */
 }
 
 #youtubeUrl {
     flex-grow: 1;
-    padding: 12px 15px;
-    border: 1px solid #ddd;
-    border-radius: 4px;
-    font-size: 1em;
+    padding: 14px 20px;
+    border: 2px solid #ddd;
+    border-radius: 8px;
+    font-size: 1.1em;
     outline: none;
+    transition: all 0.3s ease;
+    box-shadow: 0 0 5px rgba(0, 123, 255, 0.2);
 }
 
 #youtubeUrl:focus {
     border-color: #007bff;
-    box-shadow: 0 0 0 0.2rem rgba(0,123,255,.25);
+    box-shadow: 0 0 8px rgba(0, 123, 255, 0.3);
 }
 
 #downloadBtn {
-    padding: 12px 20px;
+    padding: 14px 25px;
     background-color: #c4302b; /* Cor YouTube Red */
     color: white;
     border: none;
-    border-radius: 4px;
+    border-radius: 8px;
     cursor: pointer;
-    font-size: 1em;
-    transition: background-color 0.3s ease;
+    font-size: 1.1em;
+    transition: background-color 0.3s ease, transform 0.3s ease;
 }
 
 #downloadBtn:hover {
     background-color: #a32420;
+    transform: translateY(-2px);
 }
 
 #downloadBtn:disabled {
@@ -67,20 +75,24 @@ h1 {
     cursor: not-allowed;
 }
 
+/* Mensagens de Status e Erro */
 #status, #error {
     margin-top: 15px;
-    font-size: 0.9em;
+    font-size: 1em;
+    color: #333;
+    font-weight: bold;
 }
 
 .error-message {
     color: #d9534f;
-    background-color: #f2dede;
+    background-color: #f8d7da;
     border: 1px solid #ebccd1;
     padding: 10px;
-    border-radius: 4px;
+    border-radius: 8px;
     display: none; /* Escondido por padrão */
 }
 
+/* Indicador de Progresso */
 #progressContainer {
     margin-top: 20px;
     text-align: center;
@@ -90,13 +102,48 @@ h1 {
     border: 5px solid #f3f3f3; /* Light grey */
     border-top: 5px solid #c4302b; /* YouTube Red */
     border-radius: 50%;
-    width: 40px;
-    height: 40px;
+    width: 50px;
+    height: 50px;
     animation: spin 1s linear infinite;
     margin: 10px auto;
 }
 
+/* Animação de carga */
 @keyframes spin {
     0% { transform: rotate(0deg); }
     100% { transform: rotate(360deg); }
+}
+
+/* Responsividade para dispositivos móveis */
+@media (max-width: 768px) {
+    .input-group {
+        flex-direction: column; /* Empilha os elementos no mobile */
+    }
+
+    #youtubeUrl, #downloadBtn {
+        width: 100%; /* Ajusta para 100% da largura */
+        padding: 14px 20px;
+    }
+    #youtubeUrl{
+        width:  89%;
+    }
+}
+
+@media (max-width: 480px) {
+    h1 {
+        font-size: 1.6em; /* Ajusta o título para telas menores */
+    }
+
+    .container {
+        padding: 25px;
+    }
+
+    #status, #error {
+        font-size: 0.9em; /* Ajusta o tamanho da fonte */
+    }
+
+    .loader {
+        width: 40px;
+        height: 40px; /* Ajusta o tamanho do loader */
+    }
 }

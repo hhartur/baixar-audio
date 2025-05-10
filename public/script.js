@@ -1,4 +1,3 @@
-// frontend/script.js
 document.addEventListener('DOMContentLoaded', () => {
     const urlInput = document.getElementById('youtubeUrl');
     const downloadBtn = document.getElementById('downloadBtn');
@@ -36,7 +35,6 @@ document.addEventListener('DOMContentLoaded', () => {
 
             if (response.ok) {
                 // O backend está enviando o arquivo diretamente
-                // Precisamos pegar o nome do arquivo do header Content-Disposition
                 const contentDisposition = response.headers.get('content-disposition');
                 let filename = 'audio.mp3'; // Default filename
                 if (contentDisposition) {
@@ -84,6 +82,5 @@ document.addEventListener('DOMContentLoaded', () => {
     function clearMessages() {
         errorDiv.textContent = '';
         errorDiv.style.display = 'none';
-        // statusDiv.textContent = ''; // Não limpar status aqui, pois pode ter mensagem de sucesso
     }
 });

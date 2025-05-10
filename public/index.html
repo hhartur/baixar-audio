@@ -1,26 +1,37 @@
 <!DOCTYPE html>
 <html lang="pt-BR">
+
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>YouTube para MP3 Downloader</title>
+    <title>Baixar Áudio do YouTube</title>
     <link rel="stylesheet" href="style.css">
 </head>
+
 <body>
     <div class="container">
-        <h1>Baixar MP3 do YouTube</h1>
+        <h1>Baixar Áudio do YouTube</h1>
+
+        <!-- Grupo de input e botão -->
         <div class="input-group">
-            <input type="text" id="youtubeUrl" placeholder="Cole o link do YouTube aqui">
-            <button id="downloadBtn">Baixar MP3</button>
+            <input type="text" id="youtubeUrl" placeholder="Cole o link do YouTube aqui" aria-label="URL do YouTube">
+            <button id="downloadBtn" aria-label="Baixar áudio">Baixar Áudio</button>
         </div>
+
+        <!-- Mensagem de status -->
         <div id="status"></div>
-        <div id="progressContainer" style="display:none;">
-            <p>Processando... Isso pode levar alguns instantes.</p>
+
+        <!-- Mensagem de erro -->
+        <div id="error" class="error-message" style="display: none;"></div>
+
+        <!-- Indicador de progresso -->
+        <div id="progressContainer" style="display: none;">
             <div class="loader"></div>
+            <p>Baixando...</p>
         </div>
-        <div id="error" class="error-message"></div>
     </div>
 
     <script src="script.js"></script>
 </body>
+
 </html>
