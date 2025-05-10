@@ -10,56 +10,50 @@ const port = process.env.PORT || 3000;
 app.use(express.static(path.join(__dirname, 'public')));
 app.use(express.json());
 
-// Verifica se está no Render
-const isRender = process.env.RENDER;
+// Caminho para o yt-dlp (usando binário incluído no projeto)
+const ytDlpPath = path.join(__dirname, 'bin', 'yt-dlp');
 
-// Caminho para o yt-dlp
-const ytDlpCommand = process.env.NODE_ENV === 'production' 
-  ? '/opt/render/.local/bin/yt-dlp'
-  : path.join(__dirname, 'bin', 'yt-dlp');
+// Middleware para verificar se o yt-dlp está acessível
+app.use((req, res, next) => {
+  if (!fs.existsSync(ytDlpPath)) {
+    return res.status(500).json({ error: 'Binário yt-dlp não encontrado' });
+  }
+  next();
+});
 
-// Função para sanitizar nomes de arquivo
-function sanitizeFilename(name) {
-  return name.replace(/[^\w\s.-]/g, '').replace(/\s+/g, ' ').trim();
-}
-
-// Rota de download
+// Rota de download simplificada
 app.post('/download', async (req, res) => {
   try {
     const { url } = req.body;
     if (!url) return res.status(400).json({ error: 'URL não fornecida' });
 
-    // 1. Obter título do vídeo
-    const title = await new Promise((resolve, reject) => {
-      exec(`${ytDlpCommand} --get-title "${url}"`, (err, stdout, stderr) => {
-        if (err) return reject(new Error('Falha ao obter título'));
-        resolve(sanitizeFilename(stdout.trim()));
-      });
-    });
+    // Criar diretório temporário
+    const tempDir = path.join(__dirname, 'temp');
+    if (!fs.existsSync(tempDir)) fs.mkdirSync(tempDir);
 
-    // 2. Configurar caminhos
-    const outputDir = path.join(__dirname, 'temp');
-    if (!fs.existsSync(outputDir)) fs.mkdirSync(outputDir, { recursive: true });
-    
-    const outputPath = path.join(outputDir, `${title}.mp3`);
-
-    // 3. Download e conversão
-    await new Promise((resolve, reject) => {
-      exec(
-        `${ytDlpCommand} -x --audio-format mp3 -o "${outputPath}" "${url}"`,
-        (err, stdout, stderr) => {
-          if (err) return reject(new Error('Falha no download'));
-          resolve();
+    // Executar yt-dlp diretamente
+    exec(`${ytDlpPath} -x --audio-format mp3 -o "${tempDir}/%(title)s.%(ext)s" "${url}"`, 
+      (error, stdout, stderr) => {
+        if (error) {
+          console.error('Erro:', stderr);
+          return res.status(500).json({ error: 'Falha no download' });
         }
-      );
-    });
 
-    // 4. Enviar arquivo
-    res.download(outputPath, `${title}.mp3`, (err) => {
-      // Limpar arquivo temporário
-      fs.unlink(outputPath, () => {});
-      if (err) console.error('Erro ao enviar arquivo:', err);
-    });
+        // Encontrar o arquivo baixado
+        fs.readdir(tempDir, (err, files) => {
+          if (err) return res.status(500).json({ error: 'Erro ao ler arquivos' });
+          
+          const audioFile = files.find(f => f.endsWith('.mp3'));
+          if (!audioFile) return res.status(500).json({ error: 'Arquivo não encontrado' });
+
+          const filePath = path.join(tempDir, audioFile);
+          res.download(filePath, audioFile, (err) => {
+            fs.unlink(filePath, () => {}); // Limpar após download
+            if (err) console.error('Erro ao enviar arquivo:', err);
+          });
+        });
+      }
+    );
 
   } catch (error) {
     console.error('Erro no processo:', error);
@@ -67,7 +61,6 @@ app.post('/download', async (req, res) => {
   }
 });
 
-// Iniciar servidor
 app.listen(port, () => {
   console.log(`Servidor rodando na porta ${port}`);
 });
