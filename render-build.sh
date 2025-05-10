@@ -1,20 +1,13 @@
 #!/bin/bash
 set -e
 
-echo ">>> Atualizando pacotes..."
-apt-get update -y
+echo ">>> Instalando yt-dlp via pip..."
+python3 -m pip install --user --upgrade yt-dlp
 
-echo ">>> Instalando dependências..."
-apt-get install -y ffmpeg python3-pip
+echo ">>> Verificando instalação..."
+~/.local/bin/yt-dlp --version
 
-echo ">>> Instalando yt-dlp..."
-pip3 install --upgrade yt-dlp
-
-echo ">>> Configurando yt-dlp..."
-ln -sf $(which yt-dlp) /usr/local/bin/yt-dlp
-chmod +x /usr/local/bin/yt-dlp
-
-echo ">>> Verificando versão..."
-yt-dlp --version
+echo ">>> Criando link simbólico..."
+ln -sf ~/.local/bin/yt-dlp /opt/render/.local/bin/yt-dlp
 
 echo ">>> Build completo!"

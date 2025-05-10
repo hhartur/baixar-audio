@@ -2,11 +2,11 @@
   "name": "youtube-downloader",
   "version": "1.0.0",
   "main": "server.js",
-
+  
   "scripts": {
     "start": "node server.js",
-    "build": "./render-build.sh",
-    "test": "echo \"Error: no test specified\" && exit 1"
+    "build": "python3 -m pip install --user yt-dlp && mkdir -p temp",
+    "postinstall": "node -v && npm -v"
   },
 
   "dependencies": {
